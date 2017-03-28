@@ -8,19 +8,20 @@ import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 
     
-# plot class
+
 class AnalogPlot:
-  # constr
+
   def __init__(self, strPort, maxLen):
       # open serial port
       self.ser = serial.Serial(strPort, 9600)
+      print("opened %s" % strPort)
 
       self.ax = deque([0.0]*maxLen)
       self.ay1 = deque([0.0]*maxLen)
       self.ay2 = deque([0.0]*maxLen)
       self.maxLen = maxLen
 
-  # add to buffer
+  # keep buffer full, dropping oldest data
   def addToBuf(self, buf, val):
       if len(buf) < self.maxLen:
           buf.append(val)
@@ -28,7 +29,8 @@ class AnalogPlot:
           buf.pop()
           buf.appendleft(val)
 
-  # add data
+  # add a whole data record
+  # assume <co2> <voc> <timestamp>
   def add(self, data):
       assert(len(data) == 3)
       self.addToBuf(self.ax, data[2])
@@ -36,18 +38,23 @@ class AnalogPlot:
       self.addToBuf(self.ay2, data[1])
 
   # update plot
-  def update(self, frameNum, a0, a1, a2):
+  def update(self, frameNum,  a1, a2):
+      print("enter update")
       line = ""
       try:
           line = self.ser.readline()
+          print("read %s" % line)
           data = [float(val) for val in line.split()]
-          # print data
+          
           if(len(data) == 3):
               self.add(data)
-              a0.set_data(range(self.maxLen), self.ax)
+              # a0.set_data(range(self.maxLen), self.ax)
               a1.set_data(range(self.maxLen), self.ay1)
               a2.set_data(range(self.maxLen), self.ay2)
           print("data: ", data)
+          print("ax: ", self.ax)
+          print("ay1: ", self.ay1)
+          print("ay2: ", self.ay2)
 
       except KeyboardInterrupt:
           print('exiting')
@@ -55,25 +62,20 @@ class AnalogPlot:
           print("junk \'%s\'" % line)
           pass
       
-      return a0, 
+      return a1,    #  (a1,a2)
 
   # clean up
   def close(self):
-      # close serial
       self.ser.flush()
       self.ser.close()    
 
-# main() function
 def main():
-  # create parser
   parser = argparse.ArgumentParser(description="LDR serial")
-  # add expected arguments
   parser.add_argument('--port', dest='port', required=True)
 
-  # parse args
   args = parser.parse_args()
   
-  #strPort = '/dev/tty.usbserial-A7006Yqh'
+  # strPort = '/dev/tty.usbserial-A7006Yqh'
   strPort = args.port
 
   print('reading from serial port %s...' % strPort)
@@ -84,16 +86,34 @@ def main():
   print('plotting data...')
 
   # set up animation
-  fig = plt.figure()
-  ax = plt.axes(xlim=(0, 100), ylim=(0, 1023))
-  a0, = ax.plot([], [])
-  a1, = ax.plot([], [])
-  a2, = ax.plot([], [])
+
+  # fig = plt.figure()
+  # fig, axes = plt.subplots(2, sharex=True)
+  # ax_co2 = axes[0]
+  # ax_voc = axes[1]
+
+  fig, ax_co2 = plt.subplots()
+  ax_voc = ax_co2.twinx()
+
+  ax_co2.set_xlim((0, 100))
+  ax_co2.set_xlim((0, 100))
+
+  ax_co2.set_ylim((0, 1023))
+  ax_voc.set_ylim((0, 255))
+
+  ax_co2.set_ylabel("CO2")
+  ax_voc.set_ylabel("VOC")
+
+  # ax_co2 = plt.axes(xlim=(0, 100), ylim=(0, 1023))
+  # ax_voc = plt.axes(xlim=(0, 100), ylim=(0, 255))
+
+  # a0, = ax_co2.plot([], [])
+  a1, = ax_co2.plot( [])
+  a2, = ax_voc.plot( [])
   anim = animation.FuncAnimation(fig, analogPlot.update, 
-                                 fargs=(a0, a1, a2), 
+                                 fargs=( a1, a2), 
                                  interval=50)
 
-  # show plot
   plt.show()
   
   # clean up
