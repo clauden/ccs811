@@ -22,23 +22,30 @@ class AnalogPlot:
       self.maxLen = maxLen
 
   # keep buffer full, dropping oldest data
-  def addToBuf(self, buf, val):
-      if len(buf) < self.maxLen:
-          buf.append(val)
+  def addToBuf(self, buf, val, reverse=False):
+      if reverse:
+        if len(buf) < self.maxLen:
+            buf.appendleft(val)
+        else:
+            buf.popleft()
+            buf.append(val)
       else:
-          buf.pop()
-          buf.appendleft(val)
+        if len(buf) < self.maxLen:
+            buf.append(val)
+        else:
+            buf.pop()
+            buf.appendleft(val)
 
   # add a whole data record
   # assume <co2> <voc> <timestamp>
   def add(self, data):
       assert(len(data) == 3)
-      self.addToBuf(self.ax, data[2])
+      self.addToBuf(self.ax, data[2], reverse=True)
       self.addToBuf(self.ay1, data[0])
       self.addToBuf(self.ay2, data[1])
 
   # update plot
-  def update(self, frameNum,  a1, a2):
+  def update(self, frameNum, a1, a2):
       print("enter update")
       line = ""
       try:
@@ -47,6 +54,7 @@ class AnalogPlot:
           data = [float(val) for val in line.split()]
           
           if(len(data) == 3):
+              data[2] = "%d" % (data[2] / 1000)
               self.add(data)
               # a0.set_data(range(self.maxLen), self.ax)
               a1.set_data(range(self.maxLen), self.ay1)
@@ -55,6 +63,9 @@ class AnalogPlot:
           print("ax: ", self.ax)
           print("ay1: ", self.ay1)
           print("ay2: ", self.ay2)
+
+          # refresh the x axis labels
+          plt.xticks(np.arange(0,100,10), self.ax)
 
       except KeyboardInterrupt:
           print('exiting')
@@ -93,23 +104,27 @@ def main():
   # ax_voc = axes[1]
 
   fig, ax_co2 = plt.subplots()
-  ax_voc = ax_co2.twinx()
+  ax_voc = ax_co2.twinx()       # shared x axis
 
-  ax_co2.set_xlim((0, 100))
+  # initially
   ax_co2.set_xlim((0, 100))
 
   ax_co2.set_ylim((0, 1023))
-  ax_voc.set_ylim((0, 255))
+  ax_voc.set_ylim((0, 127))
 
   ax_co2.set_ylabel("CO2")
   ax_voc.set_ylabel("VOC")
+
+  # ax_voc.set_yscale('log')
+  # ax_voc.yaxis.tick_right() 
 
   # ax_co2 = plt.axes(xlim=(0, 100), ylim=(0, 1023))
   # ax_voc = plt.axes(xlim=(0, 100), ylim=(0, 255))
 
   # a0, = ax_co2.plot([], [])
-  a1, = ax_co2.plot( [])
-  a2, = ax_voc.plot( [])
+  analogPlot.x_axis = ax_co2.get_xaxis()
+  a1, = ax_co2.plot( [], color='b')
+  a2, = ax_voc.plot( [], color='r')
   anim = animation.FuncAnimation(fig, analogPlot.update, 
                                  fargs=( a1, a2), 
                                  interval=50)
